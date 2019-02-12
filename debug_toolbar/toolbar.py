@@ -8,13 +8,16 @@ import uuid
 from collections import OrderedDict
 
 from django.apps import apps
+from django.conf import settings
 from django.conf.urls import url
+from django.core.cache import caches
 from django.core.exceptions import ImproperlyConfigured
 from django.template import TemplateSyntaxError
 from django.template.loader import render_to_string
 from django.utils.module_loading import import_string
 
 from debug_toolbar import settings as dt_settings
+import dill
 
 
 class DebugToolbar(object):
@@ -74,7 +77,7 @@ class DebugToolbar(object):
 
     # Handle storing toolbars in memory and fetching them later on
 
-    _store = OrderedDict()
+    _store = caches[settings.DEBUG_TOOLBAR_CACHE]
 
     def should_render_panels(self):
         render_panels = self.config["RENDER_PANELS"]
@@ -85,18 +88,23 @@ class DebugToolbar(object):
     def store(self):
         self.store_id = uuid.uuid4().hex
         cls = type(self)
-        cls._store[self.store_id] = self
-        for _ in range(len(cls._store) - self.config["RESULTS_CACHE_SIZE"]):
+        self.request._stream, orig_stream = None, self.request._stream
+        orig_environ = self.request.environ.copy()
+        for field, value in list(self.request.environ.items()):
             try:
-                # collections.OrderedDict
-                cls._store.popitem(last=False)
-            except TypeError:
-                # django.utils.datastructures.SortedDict
-                del cls._store[cls._store.keyOrder[0]]
+                dill.dumps(value)
+            except Exception:
+                del self.request.environ[field]
+        try:
+            data = dill.dumps(self)
+        finally:
+            self.request._stream = orig_stream
+            self.request.environ = orig_environ
+        cls._store.set(self.store_id, data)
 
     @classmethod
     def fetch(cls, store_id):
-        return cls._store.get(store_id)
+        return dill.loads(cls._store.get(store_id))
 
     # Manually implement class-level caching of panel classes and url patterns
     # because it's more obvious than going through an abstraction.

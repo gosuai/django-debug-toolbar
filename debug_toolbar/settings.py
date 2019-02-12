@@ -46,6 +46,8 @@ CONFIG_DEFAULTS = {
     "SQL_WARNING_THRESHOLD": 500,  # milliseconds
 }
 
+DEBUG_TOOLBAR_CACHE = "default"
+
 
 @lru_cache()
 def get_config():

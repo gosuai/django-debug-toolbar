@@ -174,6 +174,7 @@ class ProfilingPanel(Panel):
         # Could be delayed until the panel content is requested (perf. optim.)
         self.profiler.create_stats()
         self.stats = DjangoDebugToolbarStats(self.profiler)
+        self.profiler = None
         self.stats.calc_callees()
 
         root_func = self.stats.get_root_func()
